@@ -50,10 +50,10 @@ python examples/regression_example.py
 
 Expected output:
 ```
-Epoch 1/150, Train Loss: 0.6760, Train Loss (ensemble avg): 0.6510, Val Loss: 0.3451
+Epoch 1/150, Train Loss: 0.5501, Train Loss (ensemble avg): 0.5183, Val Loss: 0.3080
 ...
-Epoch 150/150, Train Loss: 0.0808, Train Loss (ensemble avg): 0.0528, Val Loss: 0.1608
-Test RMSE: 0.43113816
+Epoch 150/150, Train Loss: 0.0743, Train Loss (ensemble avg): 0.0466, Val Loss: 0.1548
+Test RMSE: 0.4307975
 ```
 
 This trains a TabMmini model on the California Housing dataset, standardizes the targets, and reports test RMSE.

@@ -96,6 +96,7 @@ class Trainer:
                 loss1 = loss_fn(pred, yb, training=True)
                 loss1_mean = loss1.mean()
                 loss1_mean.backward()
+                torch.nn.utils.clip_grad.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optimizer.step()
 
                 with torch.no_grad():
