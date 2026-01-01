@@ -10,7 +10,7 @@ from sklearn.utils import check_random_state
 # ------------------------------
 
 class NoisyQuantileTransformer:
-    def __init__(self, n_quantiles=100, output_distribution='uniform', noise=1e-3, random_state=None):
+    def __init__(self, n_quantiles=100, output_distribution='normal', noise=1e-3, random_state=None):
         self.n_quantiles = n_quantiles
         self.output_distribution = output_distribution
         self.noise = noise
@@ -18,13 +18,13 @@ class NoisyQuantileTransformer:
         self.qt = QuantileTransformer(n_quantiles=n_quantiles, output_distribution=output_distribution)
 
     def fit(self, X):
+        if self.noise > 0:
+            X += self.random_state.normal(0.0, self.noise, X.shape)
         self.qt.fit(X)
         return self
 
     def transform(self, X):
         X_q = self.qt.transform(X)
-        if self.noise > 0:
-            X_q += self.random_state.normal(0.0, self.noise, X_q.shape)
         return X_q
 
     def fit_transform(self, X):
@@ -62,7 +62,8 @@ def ple_encode(x, bin_edges):
 class Preprocessor:
     """
     Fits a NoisyQuantileTransformer and PLE on training data.
-    Optionally standardizes y (subtract mean / divide std) if provided.
+    Returns standardized numeric features and piecewise linear embeddings.
+    Optionally standardizes y.
     """
     def __init__(self, n_bins=4, n_quantiles=100, noise=1e-3, random_state=None, standardize_y=False):
         self.n_bins = n_bins
@@ -75,12 +76,13 @@ class Preprocessor:
         self.y_std = None
 
     # ------------------------------
-    # X
+    # PLE
     # ------------------------------
     def _ple_transform(self, X_norm):
         ple_columns = [ple_encode(X_norm[:, i], self.bin_edges_list[i])
                        for i in range(X_norm.shape[1])]
-        return np.hstack(ple_columns)
+        # return as 3D array: (batch, features, segments)
+        return np.stack(ple_columns, axis=1).astype(np.float32)
 
     # ------------------------------
     # Y
@@ -90,19 +92,23 @@ class Preprocessor:
             return (y - self.y_mean) / (self.y_std + 1e-12)
         return y
 
+    # ------------------------------
+    # Fit
+    # ------------------------------
     def fit(self, X_train, y_train=None):
-        # Fit X
+        # Standardize / normalize numeric features
         X_train_norm = self.quant_transformer.fit_transform(X_train)
-        self.bin_edges_list = []
-        ple_columns = []
 
+        # Fit PLE bins
+        self.bin_edges_list = []
         for i in range(X_train_norm.shape[1]):
             col = X_train_norm[:, i]
             bin_edges = np.quantile(col, np.linspace(0, 1, self.n_bins + 1))
             self.bin_edges_list.append(bin_edges)
-            ple_columns.append(ple_encode(col, bin_edges))
 
-        X_train_ple = np.hstack(ple_columns)
+        # Compute PLE embeddings
+        X_train_ple = self._ple_transform(X_train_norm)
+        x_num_std = X_train_norm.astype(np.float32)
 
         # Fit y if requested
         if y_train is not None and self.standardize_y:
@@ -110,20 +116,27 @@ class Preprocessor:
             self.y_mean = y_train.mean(axis=0)
             self.y_std = y_train.std(axis=0)
             y_train_std = self._standardize_y(y_train)
-            return X_train_ple, y_train_std
+            return x_num_std, X_train_ple, y_train_std
 
-        return X_train_ple
+        return x_num_std, X_train_ple
 
+    # ------------------------------
+    # Transform
+    # ------------------------------
     def transform(self, X, y=None):
         X_norm = self.quant_transformer.transform(X)
         X_ple = self._ple_transform(X_norm)
+        x_num_std = X_norm.astype(np.float32)
 
         if y is not None and self.standardize_y:
             y_std = self._standardize_y(np.asarray(y))
-            return X_ple, y_std
+            return x_num_std, X_ple, y_std
 
-        return X_ple
+        return x_num_std, X_ple
 
+    # ------------------------------
+    # Fit + Transform
+    # ------------------------------
     def fit_transform(self, X_train, y_train=None):
         return self.fit(X_train, y_train)
 

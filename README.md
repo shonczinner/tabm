@@ -17,7 +17,6 @@ Official implementation: [yandex-research/tabm](https://github.com/yandex-resear
 
 **Work in progress.** Current limitations:
 
-- No piecewise linear *embeddings* (only encoding fed to MLP)  
 - Categorical features are **not implemented**  
 - Focus on core TabM behavior, not full benchmark parity  
 
@@ -34,14 +33,73 @@ Official implementation: [yandex-research/tabm](https://github.com/yandex-resear
 
 ## Running Tests
 
-```bash
+```
 python -m pytest
 ```
 
 
+## Running Examples
+
+We provide some examples for using TabM: 
+
+### Regression Example (California Housing)
+
+```
+python examples/regression_example.py
+```
+
+Expected output:
+```
+Epoch 1/150, Train Loss: 0.6760, Train Loss (ensemble avg): 0.6510, Val Loss: 0.3451
+...
+Epoch 150/150, Train Loss: 0.0808, Train Loss (ensemble avg): 0.0528, Val Loss: 0.1608
+Test RMSE: 0.43113816
+```
+
+This trains a TabMmini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
+
+### Regression (without piecewise linear embeddings) Example (California Housing)
+
+```
+python examples/regression_example_no_ple.py
+```
+
+Expected output:
+```
+Epoch 1/150, Train Loss: 0.5095, Train Loss (ensemble avg): 0.4798, Val Loss: 0.3119
+...
+Epoch 150/150, Train Loss: 0.1135, Train Loss (ensemble avg): 0.0863, Val Loss: 0.1807
+Test RMSE: 0.4721563
+```
+
+This trains a TabMmini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
+
+### Classification Example (Breast Cancer)
+python examples/classification_example.py
+
+
+Expected output:
+```
+Epoch 1/100, Train Loss: 0.6377, Train Loss (ensemble avg): 0.6552, Val Loss: 0.5696
+...
+Epoch 100/100, Train Loss: 0.0010, Train Loss (ensemble avg): 0.3138, Val Loss: 0.3479
+Test Accuracy: 0.9824561403508771
+```
+
+This trains a TabMmini model for classification using PLE features and reports ensemble-averaged probabilities.
+
+### Notes
+
+- Losses are plotted automatically after training with pipe.plot_losses().
+
+- Regression example automatically rescales predictions to the original target scale.
+
+- Classification example averages ensemble outputs before computing predicted classes.
+
+
 ## Install Dependencies
 
-```bash
+```
 pip install -r requirements.txt
 ```
 

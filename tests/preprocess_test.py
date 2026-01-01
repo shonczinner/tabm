@@ -30,20 +30,23 @@ def dummy_target():
 
 def test_preprocessor_fit_transform_shape(dummy_numeric_data):
     pre = preprocess.Preprocessor(n_bins=4, noise=1e-4, random_state=42)
-    X_ple = pre.fit_transform(dummy_numeric_data)
-    # Shape should be (n_samples, n_features * n_bins)
-    assert X_ple.shape == (dummy_numeric_data.shape[0], dummy_numeric_data.shape[1] * 4)
+    x_num_std, X_ple = pre.fit_transform(dummy_numeric_data)
+    # x_num_std shape: (batch, features)
+    assert x_num_std.shape == dummy_numeric_data.shape
+    # X_ple shape: (batch, features, n_bins)
+    assert X_ple.shape == (dummy_numeric_data.shape[0], dummy_numeric_data.shape[1], 4)
 
 def test_preprocessor_transform_consistency(dummy_numeric_data):
     pre = preprocess.Preprocessor(n_bins=4, noise=0, random_state=42)
-    X_train_ple = pre.fit_transform(dummy_numeric_data)
-    X_new_ple = pre.transform(dummy_numeric_data)
-    # With noise=0, transformed data should match fit_transform
+    x_num_std_train, X_train_ple = pre.fit_transform(dummy_numeric_data)
+    x_num_std_new, X_new_ple = pre.transform(dummy_numeric_data)
+    # With noise=0, numeric features and PLE should match
+    assert np.allclose(x_num_std_train, x_num_std_new)
     assert np.allclose(X_train_ple, X_new_ple)
 
 def test_preprocessor_values_range(dummy_numeric_data):
     pre = preprocess.Preprocessor(n_bins=4, noise=0, random_state=42)
-    X_ple = pre.fit_transform(dummy_numeric_data)
+    _, X_ple = pre.fit_transform(dummy_numeric_data)
     # All values in [0,1]
     assert X_ple.min() >= 0.0 and X_ple.max() <= 1.0
 
@@ -64,18 +67,21 @@ def test_ple_encode_edges(dummy_vector):
 
 def test_preprocessor_with_y(dummy_numeric_data, dummy_target):
     pre = preprocess.Preprocessor(n_bins=4, standardize_y=True, noise=0, random_state=42)
-    X_ple, y_std = pre.fit_transform(dummy_numeric_data, dummy_target)
-    # X shape
-    assert X_ple.shape == (dummy_numeric_data.shape[0], dummy_numeric_data.shape[1] * 4)
+    x_num_std, X_ple, y_std = pre.fit_transform(dummy_numeric_data, dummy_target)
+    # x_num_std shape
+    assert x_num_std.shape == dummy_numeric_data.shape
+    # X_ple shape
+    assert X_ple.shape == (dummy_numeric_data.shape[0], dummy_numeric_data.shape[1], 4)
     # y standardized: mean approx 0, std approx 1
     assert np.allclose(y_std.mean(), 0, atol=1e-6)
     assert np.allclose(y_std.std(), 1, atol=1e-6)
 
 def test_preprocessor_transform_with_y(dummy_numeric_data, dummy_target):
     pre = preprocess.Preprocessor(n_bins=4, standardize_y=True, noise=0, random_state=42)
-    X_train_ple, y_train_std = pre.fit_transform(dummy_numeric_data, dummy_target)
-    X_new_ple, y_new_std = pre.transform(dummy_numeric_data, dummy_target)
-    # With noise=0, X should match
+    x_num_std_train, X_train_ple, y_train_std = pre.fit_transform(dummy_numeric_data, dummy_target)
+    x_num_std_new, X_new_ple, y_new_std = pre.transform(dummy_numeric_data, dummy_target)
+    # With noise=0, numeric features and PLE should match
+    assert np.allclose(x_num_std_train, x_num_std_new)
     assert np.allclose(X_train_ple, X_new_ple)
     # y standardized should match
     assert np.allclose(y_train_std, y_new_std)
