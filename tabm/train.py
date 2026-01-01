@@ -40,15 +40,15 @@ class Trainer:
         self.val_losses = []
 
     def fit(self, X_num, X_ple=None, y_train=None, X_val_num=None, X_val_ple=None, y_val=None):
-        X_num = torch.tensor(X_num, dtype=torch.float32).to(self.device)
-        y_train = torch.tensor(y_train, dtype=torch.float32).to(self.device)
+        X_num = torch.tensor(X_num).to(self.device)
+        y_train = torch.tensor(y_train).to(self.device)
         self.input_dim = X_num.shape[1]
 
         # Determine n_bins if PLE is used
         if self.use_ple:
             if X_ple is None:
                 raise ValueError("X_ple must be provided when use_ple=True")
-            X_ple = torch.tensor(X_ple, dtype=torch.float32).to(self.device)
+            X_ple = torch.tensor(X_ple).to(self.device)
             self.n_bins = X_ple.shape[2]
             dataset = TensorDataset(X_num, X_ple, y_train)
         else:
@@ -122,12 +122,12 @@ class Trainer:
 
     def predict(self, X_num, X_ple=None):
         self.model.eval()
-        X_num_tensor = torch.tensor(X_num, dtype=torch.float32).to(self.device)
+        X_num_tensor = torch.tensor(X_num).to(self.device)
 
         if self.use_ple:
             if X_ple is None:
                 raise ValueError("X_ple must be provided when model was trained with PLE")
-            X_ple_tensor = torch.tensor(X_ple, dtype=torch.float32).to(self.device)
+            X_ple_tensor = torch.tensor(X_ple).to(self.device)
 
         with torch.no_grad():
             pred = self.model(X_num_tensor, X_ple_tensor) if self.use_ple else self.model(X_num_tensor)
@@ -139,14 +139,14 @@ class Trainer:
 
     def evaluate(self, X_num, X_ple=None, y=None, loss_fn=None):
         self.model.eval()
-        X_num_tensor = torch.tensor(X_num, dtype=torch.float32).to(self.device)
+        X_num_tensor = torch.tensor(X_num).to(self.device)
 
         if self.use_ple:
             if X_ple is None:
                 raise ValueError("X_ple must be provided when model was trained with PLE")
-            X_ple_tensor = torch.tensor(X_ple, dtype=torch.float32).to(self.device)
+            X_ple_tensor = torch.tensor(X_ple).to(self.device)
 
-        y_tensor = torch.tensor(y, dtype=torch.float32).to(self.device)
+        y_tensor = torch.tensor(y).to(self.device)
         loss_fn = loss_fn or (losses.regression_loss if self.task=='regression' else losses.classification_loss)
 
         with torch.no_grad():
