@@ -138,103 +138,195 @@ class PiecewiseLinearEmbeddings(nn.Module):
         """
         x_num: (batch, n_features)
         x_ple: (batch, n_features, n_bins)
-        returns: (batch, n_features, d_embedding)
+        returns: (batch, n_features * d_embedding)
         """
         embeddings = []
         for i in range(self.n_features):
             ple_emb = self.ple_linears[i](x_ple[:, i, :])
             num_emb = self.num_linears[i](x_num[:, i:i+1])
             embeddings.append(ple_emb + num_emb)
-        out = torch.stack(embeddings, dim=1)
+        out = torch.cat(embeddings, dim=-1)
         if self.activation is not None:
             out = self.activation(out)
         return out
+    
+class CategoricalEmbeddings(nn.Module):
+    """
+    x_cat: (batch, n_cat)
+    Returns: (batch, n_cat * d_cat)
+    """
+    def __init__(self, cardinalities, d_cat):
+        super().__init__()
+        self.embeddings = nn.ModuleList(
+            [nn.Embedding(card, d_cat) for card in cardinalities]
+        )
+
+    def forward(self, x_cat):
+        outs = [emb(x_cat[:, i]) for i, emb in enumerate(self.embeddings)]
+        return torch.cat(outs, dim=-1)
+
 
 # =========================
 # TabM
 # =========================
 class TabM(nn.Module):
-    """
-    TabM = optional Piecewise Linear Embeddings + MLP + BatchEnsemble
-    """
-    def __init__(self, n_features, n_bins, d_embedding, hidden_dims, output_dim, ensemble_size, dropout=0.0, use_ple=True):
+    def __init__(
+        self,
+        n_num,
+        n_bins,
+        n_cat,
+        cat_cardinalities,
+        d_embedding,
+        d_cat,
+        hidden_dims,
+        output_dim,
+        ensemble_size,
+        dropout=0.0,
+        use_ple=True,
+    ):
         super().__init__()
-        self.requires_ple = use_ple and n_bins is not None
 
-        if self.requires_ple:
-            self.embedding = PiecewiseLinearEmbeddings(n_features, n_bins, d_embedding)
-            input_dim = n_features + n_features * d_embedding
+        self.n_num = n_num
+        self.n_cat = n_cat
+        self.ensemble_size = ensemble_size
+
+        self.use_ple = use_ple and n_num > 0
+
+        input_dim = 0
+
+        # Numerical features
+        if n_num > 0:
+            if self.use_ple:
+                self.ple = PiecewiseLinearEmbeddings(n_num, n_bins, d_embedding)
+                input_dim += n_num * d_embedding + n_num
+            else:
+                self.ple = None
+                input_dim += n_num
         else:
-            self.embedding = None
-            input_dim = n_features  # numeric features go directly
+            self.ple = None
+
+        # Categorical features
+        if n_cat > 0:
+            self.cat = CategoricalEmbeddings(cat_cardinalities, d_cat)
+            input_dim += n_cat * d_cat
+        else:
+            self.cat = None
 
         dims = [input_dim] + hidden_dims
-        self.blocks = nn.ModuleList([TabMBlock(dims[i], dims[i+1], ensemble_size, dropout, random_init=(i==0)) 
-                                     for i in range(len(hidden_dims))])
-        self.head = BatchEnsembleLinear(hidden_dims[-1], output_dim, ensemble_size, random_init=False)
+        self.blocks = nn.ModuleList(
+            TabMBlock(
+                dims[i],
+                dims[i + 1],
+                ensemble_size,
+                dropout,
+                random_init=(i == 0),
+            )
+            for i in range(len(hidden_dims))
+        )
 
-    def forward(self, x_num: torch.Tensor, x_ple: torch.Tensor = None) -> torch.Tensor:
-        """
-        x_num: (batch, n_features)
-        x_ple: (batch, n_features, n_bins) if requires_ple
-        returns: (batch, ensemble, output_dim)
-        """
-        if self.requires_ple:
-            if x_ple is None:
-                raise ValueError("PLE required but x_ple is None")
-            x_emb = self.embedding(x_num, x_ple)
-            x_emb_flat = rearrange(x_emb, "b n d -> b (n d)")  # flatten PLE embeddings
-            x_flat = torch.cat([x_num, x_emb_flat], dim=-1)    # concatenate numeric features
-        else:
-            x_flat = x_num  # numeric features go straight
+        self.head = BatchEnsembleLinear(hidden_dims[-1], output_dim, ensemble_size)
 
-        x_flat = repeat(x_flat, "b d -> b e d", e=self.head.ensemble_size)
+    def forward(self, x_num=None, x_ple=None, x_cat=None):
+        feats = []
+
+        if self.n_num > 0:
+            assert x_num is not None, "x_num is required when n_num > 0"
+            if self.use_ple:
+                assert x_ple is not None, "x_ple is required when use_ple=True"
+                feats.append(x_num)
+                feats.append(self.ple(x_num, x_ple))
+            else:
+                feats.append(x_num)
+
+        if self.n_cat > 0:
+            assert x_cat is not None, "x_cat is required when n_cat > 0"
+            feats.append(self.cat(x_cat))
+
+        x = torch.cat(feats, dim=-1)
+        x = repeat(x, "b d -> b e d", e=self.ensemble_size)
+
         for block in self.blocks:
-            x_flat = block(x_flat)
-        return self.head(x_flat)
+            x = block(x)
+
+        return self.head(x)
+
 
 # =========================
 # TabMmini
 # =========================
-class TabMmini(nn.Module):
-    """
-    TabMmini = optional Piecewise Linear Embeddings + MLP + MiniEnsemble
-    """
-    def __init__(self, n_features, n_bins, d_embedding, hidden_dims, output_dim, ensemble_size, dropout=0.0, use_ple=True):
+class TabMMini(nn.Module):
+    def __init__(
+        self,
+        n_num,
+        n_bins,
+        n_cat,
+        cat_cardinalities,
+        d_embedding,
+        d_cat,
+        hidden_dims,
+        output_dim,
+        ensemble_size,
+        dropout=0.0,
+        use_ple=True,
+    ):
         super().__init__()
-        self.requires_ple = use_ple and n_bins is not None
 
-        if self.requires_ple:
-            self.embedding = PiecewiseLinearEmbeddings(n_features, n_bins, d_embedding)
-            input_dim = n_features + n_features * d_embedding
+        self.n_num = n_num
+        self.n_cat = n_cat
+        self.ensemble_size = ensemble_size
+
+        self.use_ple = use_ple and n_num > 0
+
+        input_dim = 0
+
+        if n_num > 0:
+            if self.use_ple:
+                self.ple = PiecewiseLinearEmbeddings(n_num, n_bins, d_embedding)
+                input_dim += n_num * d_embedding + n_num
+            else:
+                self.ple = None
+                input_dim += n_num
         else:
-            self.embedding = None
-            input_dim = n_features
+            self.ple = None
+
+        if n_cat > 0:
+            self.cat = CategoricalEmbeddings(cat_cardinalities, d_cat)
+            input_dim += n_cat * d_cat
+        else:
+            self.cat = None
 
         dims = [input_dim] + hidden_dims
-        self.first = MiniEnsembleLinear(input_dim, hidden_dims[0], ensemble_size)
-        self.blocks = nn.ModuleList([SharedBlock(dims[i], dims[i+1], dropout) for i in range(1, len(hidden_dims))])
-        self.head = nn.Linear(hidden_dims[-1], output_dim)
-        self.dropout = nn.Dropout(dropout)
+        self.blocks = nn.ModuleList(
+            nn.Sequential(
+                MiniEnsembleLinear(dims[i], dims[i + 1], ensemble_size),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+            )
+            for i in range(len(hidden_dims))
+        )
 
-    def forward(self, x_num: torch.Tensor, x_ple: torch.Tensor = None) -> torch.Tensor:
-        """
-        x_num: (batch, n_features)
-        x_ple: (batch, n_features, n_bins) if requires_ple
-        returns: (batch, ensemble, output_dim)
-        """
-        if self.requires_ple:
-            if x_ple is None:
-                raise ValueError("PLE required but x_ple is None")
-            x_emb = self.embedding(x_num, x_ple)
-            x_emb_flat = rearrange(x_emb, "b n d -> b (n d)")  # flatten PLE embeddings
-            x_flat = torch.cat([x_num, x_emb_flat], dim=-1)    # concatenate numeric features
-        else:
-            x_flat = x_num
+        self.head = MiniEnsembleLinear(hidden_dims[-1], output_dim, ensemble_size)
 
-        x_flat = repeat(x_flat, "b d -> b e d", e=self.first.ensemble_size)
-        x_flat = F.relu(self.first(x_flat))
-        x_flat = self.dropout(x_flat)
+    def forward(self, x_num=None, x_ple=None, x_cat=None):
+        feats = []
+
+        if self.n_num > 0:
+            assert x_num is not None
+            if self.use_ple:
+                assert x_ple is not None
+                feats.append(x_num)
+                feats.append(self.ple(x_num, x_ple))
+            else:
+                feats.append(x_num)
+
+        if self.n_cat > 0:
+            assert x_cat is not None
+            feats.append(self.cat(x_cat))
+
+        x = torch.cat(feats, dim=-1)
+        x = repeat(x, "b d -> b e d", e=self.ensemble_size)
+
         for block in self.blocks:
-            x_flat = block(x_flat)
-        return self.head(x_flat)
+            x = block(x)
+
+        return self.head(x)

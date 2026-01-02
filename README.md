@@ -17,7 +17,6 @@ Official implementation: [yandex-research/tabm](https://github.com/yandex-resear
 
 **Work in progress.** Current limitations:
 
-- Categorical features are **not implemented**  
 - Focus on core TabM behavior, not full benchmark parity  
 
 ---
@@ -56,7 +55,7 @@ Epoch 150/150, Train Loss: 0.0743, Train Loss (ensemble avg): 0.0466, Val Loss: 
 Test RMSE: 0.4307975
 ```
 
-This trains a TabMmini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
+This trains a TabMMini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
 
 ### Regression (without piecewise linear embeddings) Example (California Housing)
 
@@ -72,7 +71,7 @@ Epoch 150/150, Train Loss: 0.1135, Train Loss (ensemble avg): 0.0863, Val Loss: 
 Test RMSE: 0.4721563
 ```
 
-This trains a TabMmini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
+This trains a TabMMini model on the California Housing dataset, standardizes the targets, and reports test RMSE.
 
 ### Classification Example (Breast Cancer)
 python examples/classification_example.py
@@ -86,7 +85,7 @@ Epoch 100/100, Train Loss: 0.0010, Train Loss (ensemble avg): 0.3138, Val Loss: 
 Test Accuracy: 0.9824561403508771
 ```
 
-This trains a TabMmini model for classification using PLE features and reports ensemble-averaged probabilities.
+This trains a TabMMini model for classification using PLE features and reports ensemble-averaged probabilities.
 
 ### Notes
 

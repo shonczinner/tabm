@@ -1,4 +1,4 @@
-# Example usage of TabM for regression with y scaling
+# Example usage of TabMmini for regression with y scaling
 
 from sklearn.datasets import fetch_california_housing
 from sklearn.model_selection import train_test_split
@@ -36,23 +36,30 @@ X_val_num, X_val_ple, y_val_std = pre.transform(X_val, y_val)
 X_test_num, X_test_ple, y_test_std = pre.transform(X_test, y_test)
 
 # -------------------------------
-# Initialize and train TabMmini
+# Initialize and train TabMMini
 # -------------------------------
 pipe = train.Trainer(
     task='regression',
     n_epochs=150,
     ensemble_size=32,
     is_mini=True,
-    batch_size=256
+    batch_size=256,
+    use_ple=True
 )
 
-pipe.fit(X_train_num, X_train_ple, y_train_std, 
-         X_val_num, X_val_ple, y_val_std)
+pipe.fit(
+    X_num=X_train_num,
+    X_ple=X_train_ple,
+    y_train=y_train_std,
+    X_val_num=X_val_num,
+    X_val_ple=X_val_ple,
+    y_val=y_val_std
+)
 
 # -------------------------------
 # Predict and rescale to original y
 # -------------------------------
-pred_std = pipe.predict(X_test_num, X_test_ple)
+pred_std = pipe.predict(X_num=X_test_num, X_ple=X_test_ple)
 pred = pred_std * pre.y_std + pre.y_mean  # reverse standardization
 
 rmse = np.sqrt(((pred - y_test)**2).mean())

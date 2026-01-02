@@ -1,4 +1,4 @@
-# Example usage of TabM for a classification task
+# Example usage of TabMmini for a classification task
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
@@ -20,10 +20,15 @@ X_train, X_val, y_train, y_val = train_test_split(
 )
 
 # -------------------------------
-# Preprocess features only
+# Preprocess features only (numeric + PLE)
 # -------------------------------
-pre = preprocess.Preprocessor(n_bins=4,n_quantiles=20, noise=1e-3, random_state=42)
-# Returns X_num_std and X_ple
+pre = preprocess.Preprocessor(
+    n_bins=4,
+    n_quantiles=20,
+    noise=1e-3,
+    random_state=42
+)
+# Fit-transform returns numeric features and PLE features
 X_train_num, X_train_ple = pre.fit_transform(X_train)
 X_val_num, X_val_ple = pre.transform(X_val)
 X_test_num, X_test_ple = pre.transform(X_test)
@@ -42,14 +47,18 @@ pipe = train.Trainer(
 )
 
 pipe.fit(
-    X_train_num, X_train_ple, y_train,
-    X_val_num, X_val_ple, y_val
+    X_num=X_train_num,
+    X_ple=X_train_ple,
+    y_train=y_train,
+    X_val_num=X_val_num,
+    X_val_ple=X_val_ple,
+    y_val=y_val
 )
 
 # -------------------------------
 # Predict probabilities and classes
 # -------------------------------
-probs = pipe.predict(X_test_num, X_test_ple)  # averaged ensemble probabilities
+probs = pipe.predict(X_num=X_test_num, X_ple=X_test_ple)  # averaged ensemble probabilities
 pred_classes = np.argmax(probs, axis=1)
 
 # Compute accuracy

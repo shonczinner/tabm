@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange, repeat
 
 # ------------------------------
 # Regression Loss
@@ -75,15 +76,17 @@ def classification_loss(
     """
     if training:
         batch, ensemble, num_classes = y_pred.shape
-        losses = [
-            F.cross_entropy(y_pred[:, i, :], y_true, reduction='none') 
-            for i in range(ensemble)
-        ]
-        loss_tensor = torch.stack(losses, dim=1)  # (batch, ensemble)
+        # Expand y_true to match batch × ensemble
+        y_true_exp = repeat(y_true, "b -> (b e)", e=ensemble)
+        # Flatten y_pred from (batch, ensemble, num_classes) -> (batch*ensemble, num_classes)
+        y_pred_flat = rearrange(y_pred, "b e c -> (b e) c")
+        # Compute cross-entropy in one go and reshape back to (batch, ensemble)
+        loss_tensor = rearrange(F.cross_entropy(y_pred_flat, y_true_exp, reduction="none"), "(b e) -> b e", b=batch, e=ensemble)
     else:
-        probs = F.softmax(y_pred, dim=-1)  # (batch, ensemble, num_classes)
-        avg_probs = probs.mean(dim=1)      # (batch, num_classes)
-        loss_tensor = F.cross_entropy(avg_probs, y_true, reduction='none')  # (batch,)
+        probs = F.softmax(y_pred, dim=-1)      # (batch, ensemble, num_classes)
+        avg_probs = probs.mean(dim=1)          # (batch, num_classes)
+        log_avg_probs = torch.log(avg_probs)   # log-probabilities
+        loss_tensor = F.nll_loss(log_avg_probs, y_true,reduction='none')
 
     if reduction == 'mean':
         return loss_tensor.mean()

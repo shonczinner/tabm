@@ -1,4 +1,4 @@
-# Example usage of TabM for regression with y scaling
+# Example usage of TabMmini for regression (numeric-only)
 
 from sklearn.datasets import fetch_california_housing
 from sklearn.model_selection import train_test_split
@@ -20,10 +20,10 @@ X_train, X_val, y_train, y_val = train_test_split(
 )
 
 # -------------------------------
-# Preprocess: numeric + PLE + y scaling
+# Preprocess: numeric features only, y scaling
 # -------------------------------
 pre = preprocess.Preprocessor(
-    n_bins=100,
+    n_bins=100,      # ignored here because use_ple=False
     noise=1e-3,
     standardize_y=True,
     random_state=42
@@ -36,7 +36,7 @@ X_val_num, _, y_val_std = pre.transform(X_val, y_val)
 X_test_num, _, y_test_std = pre.transform(X_test, y_test)
 
 # -------------------------------
-# Initialize and train TabMmini
+# Initialize and train TabMmini (no PLE)
 # -------------------------------
 pipe = train.Trainer(
     task='regression',
@@ -47,13 +47,19 @@ pipe = train.Trainer(
     use_ple=False
 )
 
-pipe.fit(X_train_num, None, y_train_std, 
-         X_val_num, None, y_val_std)
+pipe.fit(
+    X_num=X_train_num,
+    X_ple=None,           # no PLE features
+    y_train=y_train_std,
+    X_val_num=X_val_num,
+    X_val_ple=None,
+    y_val=y_val_std
+)
 
 # -------------------------------
 # Predict and rescale to original y
 # -------------------------------
-pred_std = pipe.predict(X_test_num, None)
+pred_std = pipe.predict(X_num=X_test_num, X_ple=None)
 pred = pred_std * pre.y_std + pre.y_mean  # reverse standardization
 
 rmse = np.sqrt(((pred - y_test)**2).mean())
